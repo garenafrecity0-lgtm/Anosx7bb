@@ -1,0 +1,6 @@
+{
+  "name": "Anos v4",
+  "description": "Game Booster VIP complet pour optimiser la fluidité tactile, la réactivité des gestes, le refroidissement automatique et les performances 120 FPS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
