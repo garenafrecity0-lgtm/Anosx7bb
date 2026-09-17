@@ -3,6 +3,8 @@ package com.example.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -34,34 +36,46 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -104,6 +118,7 @@ import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.BoosterViewModel
 
 private enum class AdminTab(val title: String, val icon: ImageVector) {
+    APP_MANAGER("App Protégée", Icons.Default.RocketLaunch),
     GENERATOR("Générateur VIP", Icons.Default.FlashOn),
     SESSIONS("Sessions & Géoloc", Icons.Default.Devices),
     BROADCAST("Diffuser Notif", Icons.Default.NotificationsActive),
@@ -119,6 +134,9 @@ fun AdminPanelScreen(
     val rawLicenses by viewModel.allLicenses.collectAsState()
     val activeSessions by viewModel.activeSessions.collectAsState()
     val broadcasts by viewModel.broadcasts.collectAsState()
+    val protectedApp by viewModel.protectedApp.collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
+    val isImportingApk by viewModel.isImportingApk.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -127,13 +145,44 @@ fun AdminPanelScreen(
         rawLicenses.filter { it.keyType != "ADMIN" }
     }
 
-    var activeTab by remember { mutableStateOf(AdminTab.GENERATOR) }
+    var activeTab by remember { mutableStateOf(AdminTab.APP_MANAGER) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedDurationHours by remember { mutableStateOf<Long>(0L) } // 0 = Illimité
     var clientNote by remember { mutableStateOf("") }
     var newlyCreatedKey by remember { mutableStateOf<String?>(null) }
     var selectedBatchCount by remember { mutableStateOf(1) }
     var newlyCreatedBatchKeys by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // App Manager States
+    var showInstalledAppsDialog by remember { mutableStateOf(false) }
+    var installedAppSearchQuery by remember { mutableStateOf("") }
+    var customAppName by remember { mutableStateOf(protectedApp.appName) }
+    var customPackageName by remember { mutableStateOf(protectedApp.packageName) }
+    var customVersionName by remember { mutableStateOf(protectedApp.versionName) }
+    var customEmbeddedAppUrl by remember { mutableStateOf(protectedApp.embeddedAppUrl) }
+    var customDescription by remember { mutableStateOf(protectedApp.description) }
+    var isAppLocked by remember { mutableStateOf(protectedApp.isLocked) }
+
+    LaunchedEffect(protectedApp) {
+        customAppName = protectedApp.appName
+        customPackageName = protectedApp.packageName
+        customVersionName = protectedApp.versionName
+        customEmbeddedAppUrl = protectedApp.embeddedAppUrl
+        customDescription = protectedApp.description
+        isAppLocked = protectedApp.isLocked
+    }
+
+    val apkPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importApk(uri) { success, name ->
+                if (success) {
+                    Toast.makeText(context, "✅ APK « $name » importé et configuré avec succès !", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     // Broadcast Push Notification States
     var broadcastTitleInput by remember { mutableStateOf("🔥 MISE À JOUR VIP ANOX / ANOS v4") }
@@ -146,13 +195,14 @@ fun AdminPanelScreen(
 
     val durations = listOf(
         Pair("1 Heure", 1L),
+        Pair("5 Heures", 5L),
         Pair("24 Heures", 24L),
         Pair("7 Jours", 168L),
         Pair("30 Jours", 720L),
         Pair("À Vie (Illimité)", 0L)
     )
 
-    val onlineSessionsCount = activeSessions.count { it.isOnline }
+    val onlineSessionsCount = activeSessions.count { it.isOnline && (System.currentTimeMillis() - it.lastPingAt < 300_000L) }
     val activeKeysCount = clientLicenses.count { it.isActive && (it.expiresAt == 0L || it.expiresAt > System.currentTimeMillis()) }
     val expiredKeysCount = clientLicenses.count { !it.isActive || (it.expiresAt > 0L && System.currentTimeMillis() > it.expiresAt) }
 
@@ -344,6 +394,474 @@ fun AdminPanelScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // TAB 0: PROTECTED APP MANAGER (UPLOAD & CONFIGURATION)
+        if (activeTab == AdminTab.APP_MANAGER) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(DarkSurface)
+                        .border(BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f)), RoundedCornerShape(20.dp))
+                        .padding(18.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(CyberCyan.copy(alpha = 0.3f), CyberGold.copy(alpha = 0.2f))
+                                        )
+                                    )
+                                    .border(1.dp, CyberCyan, RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RocketLaunch,
+                                    contentDescription = null,
+                                    tint = CyberCyan,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "GESTIONNAIRE D'APPLICATION PROTÉGÉE",
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Uploadez ou définissez l'application accessible uniquement par clé",
+                                    color = CyberCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text(
+                            text = "Les utilisateurs qui reçoivent votre application devront obligatoirement entrer une clé VIP valide générée dans le panneau admin pour pouvoir ouvrir l'application ci-dessous.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // BOUTONS D'IMPORTATION PRINCIPAUX
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Bouton Upload APK
+                            Button(
+                                onClick = {
+                                    apkPickerLauncher.launch("*/*")
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("upload_apk_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CyberCyan,
+                                    contentColor = DarkBackground
+                                ),
+                                enabled = !isImportingApk
+                            ) {
+                                if (isImportingApk) {
+                                    CircularProgressIndicator(
+                                        color = DarkBackground,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.FileUpload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Importer APK",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Bouton Sélectionner App Installée
+                            Button(
+                                onClick = {
+                                    viewModel.refreshInstalledApps()
+                                    showInstalledAppsDialog = true
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("select_installed_app_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CyberGold,
+                                    contentColor = DarkBackground
+                                )
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Apps,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "App Installée",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // APERÇU DE L'APPLICATION ACTUELLEMENT PROTÉGÉE
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(DarkSurfaceElevated)
+                                .border(
+                                    1.dp,
+                                    if (protectedApp.isLocked) CyberCrimson else CyberCyan.copy(alpha = 0.4f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.RocketLaunch,
+                                            contentDescription = null,
+                                            tint = if (protectedApp.isLocked) CyberCrimson else CyberCyan,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "APPLICATION ACTUELLE",
+                                            color = TextMuted,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                (if (protectedApp.isLocked) CyberCrimson else CyberNeonGreen).copy(alpha = 0.15f)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = if (protectedApp.isLocked) "VERROUILLÉE" else "PRÊTE & PROTÉGÉE",
+                                            color = if (protectedApp.isLocked) CyberCrimson else CyberNeonGreen,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = protectedApp.appName,
+                                    color = TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+
+                                Text(
+                                    text = "Package : ${protectedApp.packageName}",
+                                    color = CyberCyan,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+
+                                Text(
+                                    text = "Version : ${protectedApp.versionName} • Type : ${protectedApp.appType} ${if (protectedApp.apkFileSizeMb > 0) "• ${protectedApp.apkFileSizeMb} MB" else ""}",
+                                    color = TextMuted,
+                                    fontSize = 10.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Bouton de test direct
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.launchProtectedApp { error ->
+                                                Toast.makeText(context, "Erreur : $error", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = CyberCyan.copy(alpha = 0.2f),
+                                            contentColor = CyberCyan
+                                        ),
+                                        border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.6f))
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.RocketLaunch,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Tester Lancement", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.updateProtectedAppConfig(
+                                                appName = customAppName,
+                                                packageName = customPackageName,
+                                                versionName = customVersionName,
+                                                embeddedAppUrl = customEmbeddedAppUrl,
+                                                description = customDescription,
+                                                isLocked = isAppLocked
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = CyberGold.copy(alpha = 0.2f),
+                                            contentColor = CyberGold
+                                        ),
+                                        border = BorderStroke(1.dp, CyberGold.copy(alpha = 0.6f))
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CloudSync,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Sync Cloud", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // FORMULAIRE DE CONFIGURATION DÉTAILLÉE
+                        Text(
+                            text = "CONFIGURATION MANUELLE & CLOUD",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customAppName,
+                            onValueChange = { customAppName = it },
+                            label = { Text("Nom de l'application", fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedContainerColor = DarkSurfaceElevated,
+                                unfocusedContainerColor = DarkSurfaceElevated
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customPackageName,
+                            onValueChange = { customPackageName = it },
+                            label = { Text("Identifiant / Package Name (ex: com.dts.freefireth)", fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedContainerColor = DarkSurfaceElevated,
+                                unfocusedContainerColor = DarkSurfaceElevated
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customVersionName,
+                            onValueChange = { customVersionName = it },
+                            label = { Text("Version (ex: v4.2 VIP Container)", fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedContainerColor = DarkSurfaceElevated,
+                                unfocusedContainerColor = DarkSurfaceElevated
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customEmbeddedAppUrl,
+                            onValueChange = { customEmbeddedAppUrl = it },
+                            label = { Text("URL de l'App / Jeu / WebApp intégré dans le booster", fontSize = 11.sp) },
+                            placeholder = { Text("https://...", fontSize = 11.sp, color = TextMuted) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedContainerColor = DarkSurfaceElevated,
+                                unfocusedContainerColor = DarkSurfaceElevated
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customDescription,
+                            onValueChange = { customDescription = it },
+                            label = { Text("Message & Description pour les utilisateurs", fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedContainerColor = DarkSurfaceElevated,
+                                unfocusedContainerColor = DarkSurfaceElevated
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            maxLines = 3
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Switch de verrouillage d'urgence
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(DarkSurfaceElevated)
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Verrouillage Total d'Urgence",
+                                    color = if (isAppLocked) CyberCrimson else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Bloque l'ouverture de l'application pour tous les utilisateurs",
+                                    color = TextMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
+                            Switch(
+                                checked = isAppLocked,
+                                onCheckedChange = { isAppLocked = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = CyberCrimson,
+                                    checkedTrackColor = CyberCrimson.copy(alpha = 0.3f),
+                                    uncheckedThumbColor = TextMuted,
+                                    uncheckedTrackColor = DarkSurface
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                viewModel.updateProtectedAppConfig(
+                                    appName = customAppName,
+                                    packageName = customPackageName,
+                                    versionName = customVersionName,
+                                    embeddedAppUrl = customEmbeddedAppUrl,
+                                    description = customDescription,
+                                    isLocked = isAppLocked
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("save_app_config_button"),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyberCyan,
+                                contentColor = DarkBackground
+                            )
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudUpload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "ENREGISTRER & SYNCHRONISER L'APP PROTÉGÉE",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
                         }
                     }
                 }
@@ -1614,6 +2132,157 @@ fun AdminPanelScreen(
                 }
             }
         }
+    }
+
+    if (showInstalledAppsDialog) {
+        val filteredInstalledApps = remember(installedApps, installedAppSearchQuery) {
+            if (installedAppSearchQuery.isBlank()) installedApps
+            else installedApps.filter {
+                it.appName.contains(installedAppSearchQuery, ignoreCase = true) ||
+                        it.packageName.contains(installedAppSearchQuery, ignoreCase = true)
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showInstalledAppsDialog = false },
+            containerColor = DarkSurface,
+            title = {
+                Column {
+                    Text(
+                        text = "Sélectionner une Application",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Choisissez l'application à protéger par vos clés",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                ) {
+                    OutlinedTextField(
+                        value = installedAppSearchQuery,
+                        onValueChange = { installedAppSearchQuery = it },
+                        placeholder = { Text("Rechercher un jeu ou une application...", fontSize = 11.sp, color = TextMuted) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = CyberCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyberCyan,
+                            unfocusedBorderColor = DarkBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedContainerColor = DarkSurfaceElevated,
+                            unfocusedContainerColor = DarkSurfaceElevated
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (filteredInstalledApps.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Aucune application trouvée",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredInstalledApps) { app ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(DarkSurfaceElevated)
+                                        .border(BorderStroke(1.dp, DarkBorder), RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            viewModel.setInstalledAppAsProtected(
+                                                packageName = app.packageName,
+                                                appName = app.appName,
+                                                versionName = app.versionName
+                                            ) {
+                                                showInstalledAppsDialog = false
+                                            }
+                                        }
+                                        .padding(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(CyberCyan.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Apps,
+                                                contentDescription = null,
+                                                tint = CyberCyan,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = app.appName,
+                                                color = TextPrimary,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "${app.packageName} • ${app.versionName}",
+                                                color = TextMuted,
+                                                fontSize = 10.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showInstalledAppsDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DarkSurfaceElevated,
+                        contentColor = TextPrimary
+                    )
+                ) {
+                    Text("Fermer")
+                }
+            }
+        )
     }
 }
 

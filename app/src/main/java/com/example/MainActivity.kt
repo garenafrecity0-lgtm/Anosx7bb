@@ -24,15 +24,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.RocketLaunch
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.RocketLaunch
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -49,21 +43,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.ui.components.BoostDialog
 import com.example.ui.screens.AdminPanelScreen
 import com.example.ui.screens.AuthScreen
-import com.example.ui.screens.DashboardScreen
-import com.example.ui.screens.GamesScreen
-import com.example.ui.screens.StatsScreen
-import com.example.ui.screens.ToolsScreen
+import com.example.ui.screens.EmbeddedAppContainerScreen
+import com.example.ui.screens.ProtectedVaultScreen
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberGold
 import com.example.ui.theme.DarkBackground
@@ -79,11 +68,8 @@ enum class NavigationTab(
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
-    DASHBOARD("Booster", Icons.Filled.RocketLaunch, Icons.Outlined.RocketLaunch, "tab_dashboard"),
-    GAMES("Jeux", Icons.Filled.SportsEsports, Icons.Outlined.SportsEsports, "tab_games"),
-    TOOLS("Outils", Icons.Filled.Tune, Icons.Outlined.Tune, "tab_tools"),
-    STATS("Stats", Icons.Filled.Assessment, Icons.Outlined.Assessment, "tab_stats"),
-    ADMIN("Admin", Icons.Filled.AdminPanelSettings, Icons.Outlined.AdminPanelSettings, "tab_admin")
+    VAULT("Anos Store", Icons.Filled.Lock, Icons.Outlined.Lock, "tab_vault"),
+    ADMIN("Console Admin", Icons.Filled.AdminPanelSettings, Icons.Outlined.AdminPanelSettings, "tab_admin")
 }
 
 class MainActivity : ComponentActivity() {
@@ -114,9 +100,15 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val authStatus by viewModel.authStatus.collectAsState()
+                val isInAppContainerOpen by viewModel.isInAppContainerOpen.collectAsState()
 
                 if (!authStatus.isAuthenticated) {
                     AuthScreen(viewModel = viewModel)
+                } else if (isInAppContainerOpen) {
+                    EmbeddedAppContainerScreen(
+                        viewModel = viewModel,
+                        onCloseContainer = { viewModel.closeInAppContainer() }
+                    )
                 } else {
                     MainAppScreen(viewModel = viewModel)
                 }
@@ -128,35 +120,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppScreen(viewModel: BoosterViewModel) {
     val authStatus by viewModel.authStatus.collectAsState()
-    var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.DASHBOARD) }
-    val isBoosting by viewModel.isBoosting.collectAsState()
-    val isBoostComplete by viewModel.isBoostComplete.collectAsState()
-    val boostStep by viewModel.boostStep.collectAsState()
-    val boostStepLabel by viewModel.boostStepLabel.collectAsState()
-    val lastFreedMb by viewModel.lastFreedMb.collectAsState()
-    val lastOldPercent by viewModel.lastOldPercent.collectAsState()
-    val lastNewPercent by viewModel.lastNewPercent.collectAsState()
-    val selectedMode by viewModel.selectedMode.collectAsState()
+    var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.VAULT) }
 
-    val haptic = LocalHapticFeedback.current
-
-    LaunchedEffect(isBoostComplete) {
-        if (isBoostComplete) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        }
+    // If regular user, always show Vault screen directly without admin tab
+    if (!authStatus.isAdmin) {
+        ProtectedVaultScreen(
+            viewModel = viewModel,
+            onOpenAdmin = {}
+        )
+        return
     }
 
-    val visibleTabs = if (authStatus.isAdmin) {
-        NavigationTab.entries
-    } else {
-        NavigationTab.entries.filter { it != NavigationTab.ADMIN }
-    }
-
-    // Safety if user was on Admin tab and logged out or role changed
-    if (!authStatus.isAdmin && selectedTab == NavigationTab.ADMIN) {
-        selectedTab = NavigationTab.DASHBOARD
-    }
-
+    // Admin view with 2 bottom tabs: Vault preview and Admin Console
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -167,7 +142,7 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 NavigationBar(
                     modifier = Modifier
@@ -178,7 +153,7 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
                     containerColor = DarkSurface,
                     tonalElevation = 0.dp
                 ) {
-                    visibleTabs.forEach { tab ->
+                    NavigationTab.entries.forEach { tab ->
                         val isSelected = selectedTab == tab
                         val isTabAdmin = tab == NavigationTab.ADMIN
                         NavigationBarItem(
@@ -194,7 +169,7 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
                             label = {
                                 Text(
                                     text = tab.title,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
@@ -219,31 +194,12 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
         ) {
             Crossfade(targetState = selectedTab, label = "screenTransition") { tab ->
                 when (tab) {
-                    NavigationTab.DASHBOARD -> DashboardScreen(
+                    NavigationTab.VAULT -> ProtectedVaultScreen(
                         viewModel = viewModel,
-                        onNavigateToGames = { selectedTab = NavigationTab.GAMES },
                         onOpenAdmin = { selectedTab = NavigationTab.ADMIN }
                     )
-                    NavigationTab.GAMES -> GamesScreen(viewModel = viewModel)
-                    NavigationTab.TOOLS -> ToolsScreen(viewModel = viewModel)
-                    NavigationTab.STATS -> StatsScreen(viewModel = viewModel)
                     NavigationTab.ADMIN -> AdminPanelScreen(viewModel = viewModel)
                 }
-            }
-
-            // Global Boost sci-fi dialog
-            if (isBoosting || isBoostComplete) {
-                BoostDialog(
-                    isBoosting = isBoosting,
-                    isComplete = isBoostComplete,
-                    currentStep = boostStep,
-                    currentStepLabel = boostStepLabel,
-                    freedMb = lastFreedMb,
-                    oldPercent = lastOldPercent,
-                    newPercent = lastNewPercent,
-                    modeName = selectedMode.title,
-                    onDismiss = { viewModel.dismissBoostDialog() }
-                )
             }
         }
     }

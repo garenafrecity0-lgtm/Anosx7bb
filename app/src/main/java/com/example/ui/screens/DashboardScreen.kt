@@ -59,9 +59,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.GameApp
 import com.example.data.model.PerformanceMode
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.SdStorage
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.example.ui.components.AimGestureAssistCard
+import com.example.ui.components.AnosAiAssistantDialog
+import com.example.ui.components.BroadcastsDialog
 import com.example.ui.components.CyberHudGauge
+import com.example.ui.components.ReportIssueDialog
 import com.example.ui.components.TelemetryGrid
+import androidx.compose.material.icons.filled.Campaign
 import com.example.ui.theme.CyberCrimson
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberGold
@@ -90,93 +104,286 @@ fun DashboardScreen(
     val authStatus by viewModel.authStatus.collectAsState()
     val isOverlayActive by viewModel.isOverlayActive.collectAsState()
     val antiInputLagActive by viewModel.antiInputLagActive.collectAsState()
+    val broadcasts by viewModel.broadcasts.collectAsState()
+    val unreadCount = remember(broadcasts) { broadcasts.count { !it.isRead } }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showAnosAiDialog by remember { mutableStateOf(false) }
+    var showBroadcastsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    LazyColumn(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // App Header with Admin & License Status
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // App Header with Admin & License Status
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ANOS",
+                                color = TextPrimary,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "V4",
+                                color = CyberCyan,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        }
                         Text(
-                            text = "ANOS",
-                            color = TextPrimary,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "V4",
-                            color = CyberCyan,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
+                            text = if (authStatus.isAdmin) "CONSOLE ADMINISTRATEUR MAÎTRE" else "LICENCE ACTIVE : ${authStatus.remainingTimeFormatted}",
+                            color = if (authStatus.isAdmin) CyberGold else CyberNeonGreen,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
                         )
                     }
-                    Text(
-                        text = if (authStatus.isAdmin) "CONSOLE ADMINISTRATEUR MAÎTRE" else "LICENCE ACTIVE : ${authStatus.remainingTimeFormatted}",
-                        color = if (authStatus.isAdmin) CyberGold else CyberNeonGreen,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (authStatus.isAdmin && onOpenAdmin != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Notification Bell
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(CyberGold.copy(alpha = 0.15f))
-                                .border(1.dp, CyberGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                .clickable { onOpenAdmin() }
-                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AdminPanelSettings,
-                                    contentDescription = null,
-                                    tint = CyberGold,
-                                    modifier = Modifier.size(14.dp)
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(DarkSurfaceElevated)
+                                .border(
+                                    BorderStroke(1.dp, if (unreadCount > 0) CyberGold.copy(alpha = 0.8f) else DarkBorder),
+                                    CircleShape
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "ADMIN",
-                                    color = CyberGold,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black
+                                .clickable { showBroadcastsDialog = true }
+                                .padding(6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = "Diffusions Anos FF",
+                                tint = if (unreadCount > 0) CyberGold else TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            if (unreadCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(CyberCrimson)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
 
-                    IconButton(
-                        onClick = { viewModel.logout() },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Déconnexion",
-                            tint = TextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        if (authStatus.isAdmin && onOpenAdmin != null) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyberGold.copy(alpha = 0.15f))
+                                    .border(1.dp, CyberGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                    .clickable { onOpenAdmin() }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AdminPanelSettings,
+                                        contentDescription = null,
+                                        tint = CyberGold,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "ADMIN",
+                                        color = CyberGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.logout() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ExitToApp,
+                                contentDescription = "Déconnexion",
+                                tint = TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
-        }
+
+            // VIP Live Announcement Banner from Anos FF
+            if (broadcasts.isNotEmpty()) {
+                val latestBroadcast = broadcasts.first()
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(CyberGold.copy(alpha = 0.18f), DarkSurfaceElevated)
+                                )
+                            )
+                            .border(
+                                BorderStroke(1.dp, if (!latestBroadcast.isRead) CyberGold.copy(alpha = 0.8f) else CyberGold.copy(alpha = 0.3f)),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .clickable { showBroadcastsDialog = true }
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(CyberGold.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Campaign,
+                                        contentDescription = null,
+                                        tint = CyberGold,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "DIFFUSION D'ANOS FF",
+                                            color = CyberGold,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "• EN DIRECT",
+                                            color = CyberNeonGreen,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Text(
+                                        text = latestBroadcast.title,
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Lire >",
+                                color = CyberGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Quick Support & AI Assistant Action Row
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(DarkSurfaceElevated)
+                            .border(BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f)), RoundedCornerShape(12.dp))
+                            .clickable { showAnosAiDialog = true }
+                            .padding(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SmartToy,
+                                contentDescription = null,
+                                tint = CyberCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Assistant Anos AI",
+                                color = CyberCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(DarkSurfaceElevated)
+                            .border(BorderStroke(1.dp, CyberNeonGreen.copy(alpha = 0.5f)), RoundedCornerShape(12.dp))
+                            .clickable { showReportDialog = true }
+                            .padding(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SupportAgent,
+                                contentDescription = null,
+                                tint = CyberNeonGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Support WhatsApp",
+                                color = CyberNeonGreen,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
 
         // Central Gauge
         item {
@@ -511,6 +718,70 @@ fun DashboardScreen(
             }
         }
     }
+
+    // Floating Action Button for Anos AI Assistant
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 24.dp, end = 20.dp),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        FloatingActionButton(
+            onClick = { showAnosAiDialog = true },
+            containerColor = CyberCyan,
+            contentColor = Color.Black,
+            shape = RoundedCornerShape(18.dp),
+            elevation = FloatingActionButtonDefaults.elevation(8.dp),
+            modifier = Modifier.testTag("floating_anos_ai_button")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SmartToy,
+                    contentDescription = "Ouvrir Anos AI",
+                    tint = Color.Black,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "ANOS AI",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.sp
+                )
+            }
+        }
+    }
+
+    if (showReportDialog) {
+        ReportIssueDialog(
+            activeKey = authStatus.activeKey,
+            isAdmin = authStatus.isAdmin,
+            onDismiss = { showReportDialog = false }
+        )
+    }
+
+    if (showAnosAiDialog) {
+        AnosAiAssistantDialog(
+            onDismiss = { showAnosAiDialog = false }
+        )
+    }
+
+    if (showBroadcastsDialog) {
+        BroadcastsDialog(
+            broadcasts = broadcasts,
+            onDismiss = { 
+                showBroadcastsDialog = false
+                viewModel.markAllBroadcastsAsRead()
+            },
+            onMarkAsRead = { id -> viewModel.markBroadcastAsRead(id) },
+            onClearAll = if (authStatus.isAdmin) { { viewModel.clearAllBroadcasts() } } else null
+        )
+    }
+}
 }
 
 @Composable

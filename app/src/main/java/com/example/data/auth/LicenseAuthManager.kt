@@ -319,25 +319,6 @@ class LicenseAuthManager(private val context: Context) {
         prefs.edit().putString(PREF_SAVED_KEY, license.keyString).apply()
         recordDeviceHeartbeat(license.keyString, license.keyType, "Booster Actif (Free Fire 120 FPS)")
 
-        // Send alert notification to Admin when a user logs in
-        if (license.keyType != "ADMIN") {
-            try {
-                val geo = GeoLocationService.resolveCurrentLocation(context)
-                val manufacturer = Build.MANUFACTURER.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
-                val model = Build.MODEL
-                val deviceName = if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
-                NotificationHelper.postAdminLoginAlert(
-                    context = context,
-                    deviceModel = deviceName.ifBlank { "Smartphone Joueur" },
-                    city = geo.city,
-                    country = geo.country,
-                    flagEmoji = geo.flagEmoji,
-                    licenseKey = license.keyString,
-                    ipAddress = geo.ip
-                )
-            } catch (_: Exception) {}
-        }
-
         val remainingFormatted = if (activeExpiresAt == 0L) {
             if (license.keyType == "ADMIN") "ACCÈS MAÎTRE ILLIMITÉ" else "ACCÈS ILLIMITÉ À VIE"
         } else {
@@ -385,7 +366,6 @@ class LicenseAuthManager(private val context: Context) {
         )
 
         licenseDao.insertLicense(license)
-        syncActiveSessionsWithLicenses(licenseDao.getAllLicensesList())
         return license
     }
 
@@ -419,7 +399,6 @@ class LicenseAuthManager(private val context: Context) {
         }
 
         licenseDao.insertLicenses(licenses)
-        syncActiveSessionsWithLicenses(licenseDao.getAllLicensesList())
         return licenses
     }
 
@@ -606,7 +585,11 @@ class LicenseAuthManager(private val context: Context) {
         return id
     }
 
-    fun logout() {
+    suspend fun logout() {
+        val deviceId = getDeviceId()
+        try {
+            activeSessionDao.updatePing(deviceId, System.currentTimeMillis(), false, "Déconnecté")
+        } catch (_: Exception) {}
         prefs.edit().remove(PREF_SAVED_KEY).apply()
     }
 }

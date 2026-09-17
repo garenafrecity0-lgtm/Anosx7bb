@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Anos v4"
+rootProject.name = "Anos Store"
 
 include(":app")

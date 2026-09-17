@@ -69,6 +69,7 @@ import com.example.data.model.CrosshairStyle
 import com.example.ui.components.CrosshairPreviewCanvas
 import com.example.ui.components.FluidityBoosterCard
 import com.example.ui.components.SensitivityGeneratorCard
+import com.example.ui.components.StorageCleanerCard
 import com.example.ui.theme.CyberCrimson
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberElectricPurple
@@ -95,6 +96,8 @@ fun ToolsScreen(
     val isDnsRunning by viewModel.isDnsRunning.collectAsState()
     val displayCaps by viewModel.displayCapabilities.collectAsState()
     val antiInputLagActive by viewModel.antiInputLagActive.collectAsState()
+    val isCleaningStorage by viewModel.isCleaningStorage.collectAsState()
+    val storageCleanResult by viewModel.storageCleanResult.collectAsState()
     val context = LocalContext.current
     val activity = context as? Activity
 
@@ -604,98 +607,60 @@ fun ToolsScreen(
             }
         }
 
-        // Section 3: Nettoyeur & Do Not Disturb Shortcuts
+        // Section 3: Nettoyeur de Stockage & Shaders
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            StorageCleanerCard(
+                isCleaning = isCleaningStorage,
+                cleanResult = storageCleanResult,
+                onCleanClick = { viewModel.cleanStorageCache() },
+                onOpenSystemStorage = { viewModel.openSystemStorageSettings() }
+            )
+        }
+
+        // Section 4: Mode Silence Jeu & DND
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(DarkSurface)
+                    .border(BorderStroke(1.dp, DarkBorder), RoundedCornerShape(16.dp))
+                    .clickable {
+                        try {
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Paramètres Ne Pas Déranger accessibles dans les réglages", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .padding(14.dp)
             ) {
-                // Cache cleaner
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(DarkSurface)
-                        .border(BorderStroke(1.dp, DarkBorder), RoundedCornerShape(16.dp))
-                        .clickable {
-                            Toast.makeText(context, "Cache résiduel vidé avec succès", Toast.LENGTH_SHORT).show()
-                            viewModel.runBoost()
-                        }
-                        .padding(14.dp)
-                ) {
-                    Column {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(CyberCrimson.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CleaningServices,
-                                contentDescription = null,
-                                tint = CyberCrimson,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "NETTOYAGE PROFOND",
-                            color = TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Purge cache & fichiers temporaires",
-                            color = TextMuted,
-                            fontSize = 10.sp
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(CyberElectricPurple.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DoNotDisturbOn,
+                            contentDescription = null,
+                            tint = CyberElectricPurple,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                }
-
-                // DND assistant
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(DarkSurface)
-                        .border(BorderStroke(1.dp, DarkBorder), RoundedCornerShape(16.dp))
-                        .clickable {
-                            try {
-                                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                Toast.makeText(context, "Paramètres Ne Pas Déranger accessibles dans les réglages", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        .padding(14.dp)
-                ) {
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(CyberElectricPurple.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DoNotDisturbOn,
-                                contentDescription = null,
-                                tint = CyberElectricPurple,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "MODE SILENCE JEU",
+                            text = "MODE SILENCE JEU (NE PAS DÉRANGER)",
                             color = TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Bloquer les notifications distrayantes",
+                            text = "Bloquer les appels et notifications distrayantes pendant la partie",
                             color = TextMuted,
                             fontSize = 10.sp
                         )

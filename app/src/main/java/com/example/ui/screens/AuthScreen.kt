@@ -56,8 +56,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.SupportAgent
+import com.example.ui.components.AnosAiAssistantDialog
+import com.example.ui.components.BroadcastsDialog
+import com.example.ui.components.ReportIssueDialog
+import androidx.compose.foundation.clickable
 import com.example.ui.theme.CyberCrimson
 import com.example.ui.theme.CyberCyan
+import com.example.ui.theme.CyberGold
+import com.example.ui.theme.CyberNeonGreen
 import com.example.ui.theme.CyberNeonGreen
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkBorder
@@ -75,8 +85,13 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var keyInput by remember { mutableStateOf("") }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showAnosAiDialog by remember { mutableStateOf(false) }
+    var showBroadcastsDialog by remember { mutableStateOf(false) }
     val isAuthenticating by viewModel.isAuthenticating.collectAsState()
     val authError by viewModel.authError.collectAsState()
+    val broadcasts by viewModel.broadcasts.collectAsState()
+    val unreadCount = remember(broadcasts) { broadcasts.count { !it.isRead } }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -128,7 +143,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "V4",
+                    text = "STORE",
                     color = CyberCyan,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Black,
@@ -137,7 +152,7 @@ fun AuthScreen(
             }
 
             Text(
-                text = "PORTAIL DE SÉCURITÉ & LICENCE",
+                text = "PORTAIL DE SÉCURITÉ & LICENCE VIP",
                 color = TextMuted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -289,7 +304,7 @@ fun AuthScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "DÉVERROUILLER ANOS V3",
+                                    text = "DÉVERROUILLER ANOS V4",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.sp
@@ -300,7 +315,102 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // VIP Support, Anos AI & Broadcasts Quick Links
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurfaceElevated)
+                        .border(BorderStroke(1.dp, CyberCyan.copy(alpha = 0.4f)), RoundedCornerShape(12.dp))
+                        .clickable { showAnosAiDialog = true }
+                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.SmartToy,
+                            contentDescription = null,
+                            tint = CyberCyan,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Anos AI",
+                            color = CyberCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurfaceElevated)
+                        .border(
+                            BorderStroke(
+                                1.dp,
+                                if (unreadCount > 0) CyberGold.copy(alpha = 0.8f) else CyberGold.copy(alpha = 0.4f)
+                            ),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable { showBroadcastsDialog = true }
+                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = null,
+                            tint = CyberGold,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (unreadCount > 0) "Annonces ($unreadCount)" else "Diffusions",
+                            color = CyberGold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurfaceElevated)
+                        .border(BorderStroke(1.dp, CyberNeonGreen.copy(alpha = 0.4f)), RoundedCornerShape(12.dp))
+                        .clickable { showReportDialog = true }
+                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.SupportAgent,
+                            contentDescription = null,
+                            tint = CyberNeonGreen,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "WhatsApp",
+                            color = CyberNeonGreen,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Security note
             Box(
@@ -336,6 +446,31 @@ fun AuthScreen(
                     }
                 }
             }
+        }
+
+        if (showReportDialog) {
+            ReportIssueDialog(
+                activeKey = keyInput,
+                isAdmin = false,
+                onDismiss = { showReportDialog = false }
+            )
+        }
+
+        if (showAnosAiDialog) {
+            AnosAiAssistantDialog(
+                onDismiss = { showAnosAiDialog = false }
+            )
+        }
+
+        if (showBroadcastsDialog) {
+            BroadcastsDialog(
+                broadcasts = broadcasts,
+                onDismiss = { 
+                    showBroadcastsDialog = false
+                    viewModel.markAllBroadcastsAsRead()
+                },
+                onMarkAsRead = { id -> viewModel.markBroadcastAsRead(id) }
+            )
         }
     }
 }

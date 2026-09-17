@@ -93,11 +93,17 @@ interface BroadcastDao {
     @Query("SELECT * FROM broadcast_messages ORDER BY timestamp DESC")
     fun getAllBroadcasts(): Flow<List<BroadcastMessageEntity>>
 
+    @Query("SELECT * FROM broadcast_messages ORDER BY timestamp DESC")
+    suspend fun getAllBroadcastsList(): List<BroadcastMessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBroadcast(message: BroadcastMessageEntity): Long
 
     @Query("UPDATE broadcast_messages SET isRead = 1 WHERE id = :id")
     suspend fun markAsRead(id: Long)
+
+    @Query("UPDATE broadcast_messages SET isRead = 1")
+    suspend fun markAllAsRead()
 
     @Query("DELETE FROM broadcast_messages WHERE id = :id")
     suspend fun deleteBroadcast(id: Long)
@@ -106,13 +112,43 @@ interface BroadcastDao {
     suspend fun clearAllBroadcasts()
 }
 
-@Database(entities = [BoostLogEntity::class, GameEntity::class, LicenseKeyEntity::class, ActiveSessionEntity::class, BroadcastMessageEntity::class], version = 4, exportSchema = false)
+@Dao
+interface ProtectedAppDao {
+    @Query("SELECT * FROM protected_app WHERE id = 1 LIMIT 1")
+    fun getProtectedApp(): Flow<ProtectedAppEntity?>
+
+    @Query("SELECT * FROM protected_app WHERE id = 1 LIMIT 1")
+    suspend fun getProtectedAppDirect(): ProtectedAppEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveProtectedApp(app: ProtectedAppEntity)
+
+    @Query("UPDATE protected_app SET launchCount = launchCount + 1, lastUpdated = :timestamp WHERE id = 1")
+    suspend fun recordLaunch(timestamp: Long = System.currentTimeMillis())
+
+    @Query("UPDATE protected_app SET isLocked = :isLocked WHERE id = 1")
+    suspend fun setLocked(isLocked: Boolean)
+}
+
+@Database(
+    entities = [
+        BoostLogEntity::class,
+        GameEntity::class,
+        LicenseKeyEntity::class,
+        ActiveSessionEntity::class,
+        BroadcastMessageEntity::class,
+        ProtectedAppEntity::class
+    ],
+    version = 6,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun boostLogDao(): BoostLogDao
     abstract fun gameDao(): GameDao
     abstract fun licenseDao(): LicenseDao
     abstract fun activeSessionDao(): ActiveSessionDao
     abstract fun broadcastDao(): BroadcastDao
+    abstract fun protectedAppDao(): ProtectedAppDao
 
     companion object {
         @Volatile

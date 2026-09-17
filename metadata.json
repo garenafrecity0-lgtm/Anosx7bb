@@ -1,6 +1,6 @@
 {
-  "name": "Anos v4",
-  "description": "Game Booster VIP complet pour optimiser la fluidité tactile, la réactivité des gestes, le refroidissement automatique et les performances 120 FPS.",
+  "name": "Anos Store",
+  "description": "Anos Store - Espace sécurisé protégé par clés VIP par Anos FF. Lancez vos jeux et applications protégées directement sans quitter Anos Store.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

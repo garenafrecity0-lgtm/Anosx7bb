@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import android.view.Window
 import android.widget.Toast
@@ -17,6 +18,10 @@ import com.example.data.db.BoostLogEntity
 import com.example.data.db.BroadcastMessageEntity
 import com.example.data.db.GameEntity
 import com.example.data.db.LicenseKeyEntity
+import com.example.data.db.ProtectedAppEntity
+import com.example.data.sync.BroadcastCloudService
+import com.example.data.vault.InstalledAppItem
+import com.example.data.vault.ProtectedAppManager
 import com.example.util.NotificationHelper
 import com.example.data.model.CrosshairConfig
 import com.example.data.model.FreeFireSensitivity
@@ -37,6 +42,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,6 +56,8 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     val authManager = LicenseAuthManager(application)
     val gameOptimizer = GameOptimizer(application)
     val screenOptimizer = ScreenOptimizer(application)
+    val broadcastCloudService = BroadcastCloudService(application)
+    val protectedAppManager = ProtectedAppManager(application)
 
     // Auth & License state
     private val _authStatus = MutableStateFlow(AuthStatus())
@@ -69,6 +77,16 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
 
     val broadcasts: StateFlow<List<BroadcastMessageEntity>> = db.broadcastDao().getAllBroadcasts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val protectedApp: StateFlow<ProtectedAppEntity> = protectedAppManager.protectedAppFlow
+        .map { it ?: ProtectedAppEntity() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProtectedAppEntity())
+
+    private val _installedApps = MutableStateFlow<List<InstalledAppItem>>(emptyList())
+    val installedApps: StateFlow<List<InstalledAppItem>> = _installedApps.asStateFlow()
+
+    private val _isImportingApk = MutableStateFlow(false)
+    val isImportingApk: StateFlow<Boolean> = _isImportingApk.asStateFlow()
 
     // Free Fire Sensi Generator (0 to 200 min/max)
     private val _freeFireSensitivity = MutableStateFlow(FreeFireSensitivity())
@@ -132,6 +150,43 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     private val _gestureSmoothActive = MutableStateFlow(true)
     val gestureSmoothActive: StateFlow<Boolean> = _gestureSmoothActive.asStateFlow()
 
+    private val _isCleaningStorage = MutableStateFlow(false)
+    val isCleaningStorage: StateFlow<Boolean> = _isCleaningStorage.asStateFlow()
+
+    private val _storageCleanResult = MutableStateFlow<String?>(null)
+    val storageCleanResult: StateFlow<String?> = _storageCleanResult.asStateFlow()
+
+    fun cleanStorageCache(onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isCleaningStorage.value = true
+            val result = gameOptimizer.cleanStorageCache()
+            val freedBytes = result.first
+            val filesCount = result.second
+            
+            val message = if (freedBytes > 1024 * 1024) {
+                val freedMb = String.format(java.util.Locale.US, "%.1f", freedBytes / (1024.0 * 1024.0))
+                "✅ $freedMb Mo réels libérés ($filesCount fichiers résiduels supprimés)"
+            } else if (freedBytes > 1024) {
+                val freedKb = freedBytes / 1024
+                "✅ $freedKb Ko réels libérés ($filesCount fichiers supprimés)"
+            } else if (filesCount > 0) {
+                "✅ $freedBytes octets libérés ($filesCount fichiers supprimés)"
+            } else {
+                "✅ Cache de stockage déjà 100% propre (aucun fichier temporaire orphelin)"
+            }
+            _storageCleanResult.value = message
+            _isCleaningStorage.value = false
+            withContext(Dispatchers.Main) {
+                onComplete?.invoke(message)
+                Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun openSystemStorageSettings() {
+        gameOptimizer.openSystemStorageSettings()
+    }
+
     val dnsList = gameOptimizer.gamingDnsList
     private val _selectedDns = MutableStateFlow(gameOptimizer.gamingDnsList[0])
     val selectedDns: StateFlow<DnsServer> = _selectedDns.asStateFlow()
@@ -177,6 +232,51 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         checkAuthentication()
         startTelemetryPolling()
         loadGamesFromDb()
+        startCloudBroadcastSync()
+    }
+
+    private fun startCloudBroadcastSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    // Sync Protected App config from cloud
+                    val cloudApp = broadcastCloudService.fetchProtectedAppFromCloud()
+                    if (cloudApp != null) {
+                        val localApp = db.protectedAppDao().getProtectedAppDirect()
+                        if (localApp == null || cloudApp.lastUpdated > localApp.lastUpdated) {
+                            db.protectedAppDao().saveProtectedApp(cloudApp)
+                        }
+                    }
+
+                    // Sync Broadcasts
+                    val cloudBroadcasts = broadcastCloudService.fetchFromCloud()
+                    if (cloudBroadcasts.isNotEmpty()) {
+                        val currentLocal = db.broadcastDao().getAllBroadcastsList()
+                        for (cloudItem in cloudBroadcasts) {
+                            val alreadyExists = currentLocal.any { 
+                                it.title == cloudItem.title && it.message == cloudItem.message 
+                            }
+                            if (!alreadyExists) {
+                                val insertedId = db.broadcastDao().insertBroadcast(cloudItem)
+                                // Post notification on user device if not admin
+                                if (!_authStatus.value.isAdmin) {
+                                    withContext(Dispatchers.Main) {
+                                        NotificationHelper.postBroadcastNotification(
+                                            context = getApplication(),
+                                            title = cloudItem.title,
+                                            message = cloudItem.message,
+                                            category = cloudItem.category,
+                                            notificationId = (insertedId % 100000).toInt()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+                delay(20_000L) // Poll every 20 seconds
+            }
+        }
     }
 
     fun checkAuthentication() {
@@ -200,11 +300,6 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
                     dbCheckCounter++
                     if (dbCheckCounter >= 3) {
                         dbCheckCounter = 0
-                        withContext(Dispatchers.IO) {
-                            val allLics = db.licenseDao().getAllLicensesList()
-                            authManager.syncActiveSessionsWithLicenses(allLics)
-                        }
-
                         if (!current.isAdmin && current.activeKey.isNotEmpty()) {
                             val license = withContext(Dispatchers.IO) {
                                 authManager.getLicense(current.activeKey)
@@ -280,7 +375,9 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout() {
         authTickerJob?.cancel()
-        authManager.logout()
+        viewModelScope.launch(Dispatchers.IO) {
+            authManager.logout()
+        }
         _authStatus.value = AuthStatus()
     }
 
@@ -685,11 +782,14 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
                 message = message.trim(),
                 category = category,
                 timestamp = System.currentTimeMillis(),
-                senderAdmin = "Console Maître Anos v3"
+                senderAdmin = "Anos FF (Créateur)"
             )
             val id = db.broadcastDao().insertBroadcast(broadcast)
 
-            // Post real system push notification on the device
+            // Publier en temps réel sur le cloud pour tous les joueurs
+            broadcastCloudService.publishToCloud(broadcast.copy(id = id))
+
+            // Post real system push notification on this device
             withContext(Dispatchers.Main) {
                 NotificationHelper.postBroadcastNotification(
                     context = getApplication(),
@@ -698,7 +798,7 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
                     category = category,
                     notificationId = id.toInt()
                 )
-                Toast.makeText(getApplication(), "📢 Notification diffusée avec succès à tous les joueurs !", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), "📢 Notification diffusée et synchronisée avec succès vers tous les joueurs !", Toast.LENGTH_SHORT).show()
                 onSent?.invoke()
             }
         }
@@ -719,6 +819,135 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     fun markBroadcastAsRead(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             db.broadcastDao().markAsRead(id)
+        }
+    }
+
+    fun markAllBroadcastsAsRead() {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.broadcastDao().markAllAsRead()
+        }
+    }
+
+    // ==========================================
+    // GESTIONNAIRE D'APPLICATION PROTÉGÉE (VAULT)
+    // ==========================================
+
+    private val _isInAppContainerOpen = MutableStateFlow(false)
+    val isInAppContainerOpen: StateFlow<Boolean> = _isInAppContainerOpen.asStateFlow()
+
+    fun openInAppContainer() {
+        _isInAppContainerOpen.value = true
+    }
+
+    fun closeInAppContainer() {
+        _isInAppContainerOpen.value = false
+    }
+
+    fun refreshInstalledApps() {
+        viewModelScope.launch {
+            _installedApps.value = protectedAppManager.getInstalledAppsList()
+        }
+    }
+
+    fun importApk(uri: Uri, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _isImportingApk.value = true
+            val result = protectedAppManager.importApkFromUri(uri)
+            _isImportingApk.value = false
+            result.onSuccess { app ->
+                Toast.makeText(getApplication(), "✅ Module VIP « ${app.appName} » importé avec succès !", Toast.LENGTH_LONG).show()
+                onResult(true, app.appName)
+            }.onFailure { error ->
+                Toast.makeText(getApplication(), "❌ Erreur d'import : ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                onResult(false, error.localizedMessage ?: "Erreur")
+            }
+        }
+    }
+
+    fun setInstalledAppAsProtected(
+        packageName: String,
+        appName: String,
+        versionName: String,
+        onResult: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            protectedAppManager.setInstalledAppAsProtected(packageName, appName, versionName)
+            Toast.makeText(getApplication(), "✅ « $appName » configurée dans le booster !", Toast.LENGTH_SHORT).show()
+            onResult?.invoke()
+        }
+    }
+
+    fun updateProtectedAppConfig(
+        appName: String,
+        packageName: String,
+        versionName: String,
+        embeddedAppUrl: String,
+        description: String,
+        isLocked: Boolean,
+        onResult: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            protectedAppManager.updateProtectedAppConfig(
+                appName = appName,
+                packageName = packageName,
+                versionName = versionName,
+                embeddedAppUrl = embeddedAppUrl,
+                description = description,
+                isLocked = isLocked
+            )
+            Toast.makeText(getApplication(), "✅ Configuration de l'app protégée enregistrée et synchronisée !", Toast.LENGTH_SHORT).show()
+            onResult?.invoke()
+        }
+    }
+
+    fun launchProtectedApp(onFailure: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            // Vérifier que la clé d'authentification est toujours active
+            val currentAuth = authManager.checkCurrentAuth()
+            if (!currentAuth.isAuthenticated) {
+                _authStatus.value = currentAuth
+                Toast.makeText(getApplication(), "⛔ Clé d'accès requise pour utiliser l'application !", Toast.LENGTH_LONG).show()
+                onFailure?.invoke("Clé expirée ou invalide")
+                return@launch
+            }
+
+            val app = protectedApp.value
+            if (app.isLocked && !currentAuth.isAdmin) {
+                Toast.makeText(getApplication(), "🔒 L'administrateur Anos FF a temporairement verrouillé cette application.", Toast.LENGTH_LONG).show()
+                onFailure?.invoke("Application verrouillée par l'administrateur")
+                return@launch
+            }
+
+            protectedAppManager.recordLaunch()
+            _isInAppContainerOpen.value = true
+        }
+    }
+
+    fun launchExternalApp(packageName: String, appName: String) {
+        viewModelScope.launch {
+            val currentAuth = authManager.checkCurrentAuth()
+            if (!currentAuth.isAuthenticated) {
+                _authStatus.value = currentAuth
+                Toast.makeText(getApplication(), "⛔ Clé d'accès requise pour lancer $appName !", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            try {
+                val pm = getApplication<Application>().packageManager
+                val intent = pm.getLaunchIntentForPackage(packageName)
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    getApplication<Application>().startActivity(intent)
+                    Toast.makeText(getApplication(), "🚀 Lancement de $appName...", Toast.LENGTH_SHORT).show()
+                } else {
+                    val playStoreIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+                    playStoreIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    getApplication<Application>().startActivity(playStoreIntent)
+                    Toast.makeText(getApplication(), "ℹ️ $appName non trouvé. Redirection vers le Play Store...", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(getApplication(), "Erreur : ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }

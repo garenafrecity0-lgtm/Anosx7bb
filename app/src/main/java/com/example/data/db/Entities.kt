@@ -70,3 +70,22 @@ data class BroadcastMessageEntity(
     val isRead: Boolean = false
 )
 
+@Entity(tableName = "protected_app")
+data class ProtectedAppEntity(
+    @PrimaryKey
+    val id: Int = 1,
+    val appName: String = "Free Fire MAX VIP Hub",
+    val packageName: String = "com.dts.freefireth",
+    val versionName: String = "v3.102.1 VIP",
+    val appType: String = "IN_APP_CONTAINER", // "IN_APP_CONTAINER", "WEB_APP", "EMBEDDED_MODULE"
+    val embeddedAppUrl: String = "",
+    val localApkPath: String = "",
+    val apkFileSizeMb: Double = 0.0,
+    val cloudDownloadUrl: String = "",
+    val customIconBase64: String = "",
+    val description: String = "Application exécutée directement à l'intérieur du Booster Anos FF. Aucune installation ni téléchargement externe : accès protégé 100% par clé VIP.",
+    val isLocked: Boolean = false,
+    val lastUpdated: Long = System.currentTimeMillis(),
+    val launchCount: Int = 0
+)
+

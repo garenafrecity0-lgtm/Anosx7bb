@@ -116,6 +116,94 @@ class GameOptimizer(private val context: Context) {
     }
 
     /**
+     * Nettoyage RÉEL du stockage : parcourt les répertoires de cache et supprime
+     * les vrais fichiers temporaires résiduels, sans AUCUNE simulation.
+     */
+    suspend fun cleanStorageCache(): Pair<Long, Int> = withContext(Dispatchers.IO) {
+        var totalBytesFreed = 0L
+        var filesDeletedCount = 0
+
+        fun deleteRecursivelyAndCount(file: java.io.File?) {
+            if (file == null || !file.exists()) return
+            try {
+                if (file.isDirectory) {
+                    file.listFiles()?.forEach { child ->
+                        deleteRecursivelyAndCount(child)
+                    }
+                    file.delete()
+                } else {
+                    val length = file.length()
+                    if (file.delete()) {
+                        totalBytesFreed += length
+                        filesDeletedCount++
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        try {
+            // 1. Cache interne de l'application
+            context.cacheDir?.listFiles()?.forEach { deleteRecursivelyAndCount(it) }
+            // 2. Cache de code compilé
+            context.codeCacheDir?.listFiles()?.forEach { deleteRecursivelyAndCount(it) }
+            // 3. Cache externe principal
+            context.externalCacheDir?.listFiles()?.forEach { deleteRecursivelyAndCount(it) }
+            // 4. Caches externes secondaires (cartes SD / stockages multiples)
+            context.externalCacheDirs?.forEach { dir ->
+                dir?.listFiles()?.forEach { deleteRecursivelyAndCount(it) }
+            }
+            // 5. Fichiers temporaires .tmp et .log
+            context.getExternalFilesDirs(null)?.forEach { dir ->
+                dir?.listFiles()?.forEach { file ->
+                    if (file.name.contains("temp", ignoreCase = true) || 
+                        file.name.contains("cache", ignoreCase = true) ||
+                        file.name.endsWith(".tmp") || file.name.endsWith(".log")) {
+                        deleteRecursivelyAndCount(file)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // Forcer le ramasse-miettes système pour récupérer la mémoire
+        System.gc()
+        Runtime.getRuntime().runFinalization()
+
+        Pair(totalBytesFreed, filesDeletedCount)
+    }
+
+    /**
+     * Retourne les statistiques réelles d'espace de stockage disponible sur le téléphone (en octets).
+     */
+    fun getRealStorageInfo(): Pair<Long, Long> {
+        return try {
+            val stat = android.os.StatFs(android.os.Environment.getDataDirectory().path)
+            val available = stat.availableBytes
+            val total = stat.totalBytes
+            Pair(available, total)
+        } catch (_: Exception) {
+            Pair(0L, 0L)
+        }
+    }
+
+    /**
+     * Ouvre les paramètres système de stockage pour gestion avancée
+     */
+    fun openSystemStorageSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                intent.data = android.net.Uri.parse("package:${context.packageName}")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
      * Ouvre directement les paramètres Android pour configurer le DNS Privé
      */
     fun openPrivateDnsSettings() {
