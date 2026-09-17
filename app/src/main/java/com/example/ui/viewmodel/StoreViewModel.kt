@@ -9,9 +9,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.auth.AuthStatus
 import com.example.data.auth.LicenseAuthManager
+import com.example.data.cloud.CloudStoreSyncService
+import com.example.data.cloud.SyncStatus
 import com.example.data.db.AppDatabase
 import com.example.data.db.StoreProductEntity
 import com.example.util.NotificationHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +38,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val storeProductDao = db.storeProductDao()
     private val authManager = LicenseAuthManager(application)
+    private val cloudSyncService = CloudStoreSyncService.getInstance(application)
+
+    val syncStatus: StateFlow<SyncStatus> = cloudSyncService.syncStatus
+    val isCloudConnected: StateFlow<Boolean> = cloudSyncService.isCloudConnected
 
     private val _authStatus = MutableStateFlow(AuthStatus())
     val authStatus: StateFlow<AuthStatus> = _authStatus.asStateFlow()
@@ -79,6 +86,17 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 // Ignore
             }
             checkSavedAuth()
+            // Première synchronisation immédiate au lancement pour charger les produits du Cloud
+            cloudSyncService.syncFromCloud(silent = false)
+
+            // Boucle de synchronisation automatique toutes les 25 secondes pour détecter
+            // immédiatement les ajouts de produits par l'admin et faire sonner les téléphones des clients !
+            while (true) {
+                delay(25_000)
+                try {
+                    cloudSyncService.syncFromCloud(silent = false)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -156,7 +174,11 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 storeProductDao.insertProduct(product)
 
-                // Notification réelle envoyée aux clients avec les détails du nouveau produit
+                // Publier automatiquement vers le Cloud pour que TOUS les autres clients le reçoivent
+                val allCurrent = storeProductDao.getAllProductsList()
+                cloudSyncService.publishCatalogToCloud(allCurrent)
+
+                // Notification locale immédiate pour confirmation
                 NotificationHelper.postNewProductNotification(
                     context = getApplication(),
                     productName = product.name,
@@ -165,7 +187,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                     productDescription = product.description
                 )
 
-                onComplete(true, "Application ajoutée à la boutique avec succès !")
+                onComplete(true, "Application ajoutée et synchronisée dans le Cloud avec succès !")
             } catch (e: Exception) {
                 onComplete(false, "Erreur : ${e.localizedMessage}")
             }
@@ -206,7 +228,12 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                     category = if (category.isBlank()) "Application VIP" else category.trim(),
                     badge = if (badge.isBlank()) "POPULAIRE" else badge.trim()
                 )
-                onComplete(true, "Application mise à jour avec succès !")
+
+                // Synchroniser la mise à jour avec le Cloud
+                val allCurrent = storeProductDao.getAllProductsList()
+                cloudSyncService.publishCatalogToCloud(allCurrent)
+
+                onComplete(true, "Application mise à jour et synchronisée avec succès !")
             } catch (e: Exception) {
                 onComplete(false, "Erreur : ${e.localizedMessage}")
             }
@@ -217,9 +244,59 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 storeProductDao.deleteProduct(id)
-                onComplete(true, "Application supprimée de la boutique.")
+                val allCurrent = storeProductDao.getAllProductsList()
+                cloudSyncService.publishCatalogToCloud(allCurrent)
+                onComplete(true, "Application supprimée et synchronisée avec succès.")
             } catch (e: Exception) {
                 onComplete(false, "Erreur lors de la suppression.")
+            }
+        }
+    }
+
+    /**
+     * Force une synchronisation manuelle depuis le Cloud
+     */
+    fun syncFromCloudNow(onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = cloudSyncService.syncFromCloud(silent = false)
+            if (result.isSuccess) {
+                val count = result.getOrDefault(0)
+                onComplete(true, "Synchronisation réussie ($count produits à jour)")
+            } else {
+                onComplete(false, "Échec de connexion : ${result.exceptionOrNull()?.localizedMessage ?: "Inconnu"}")
+            }
+        }
+    }
+
+    /**
+     * Force l'envoi de la base locale vers le Cloud (utile pour l'administrateur)
+     */
+    fun pushCatalogToCloudNow(onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val current = storeProductDao.getAllProductsList()
+            val result = cloudSyncService.publishCatalogToCloud(current)
+            if (result.isSuccess) {
+                onComplete(true, "${current.size} produit(s) mis en ligne dans le Cloud pour tous les clients !")
+            } else {
+                onComplete(false, "Échec d'envoi Cloud : ${result.exceptionOrNull()?.localizedMessage ?: "Inconnu"}")
+            }
+        }
+    }
+
+    fun exportCatalogJson(): String {
+        return cloudSyncService.exportCatalogJson(allProducts.value)
+    }
+
+    fun importCatalogJson(json: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = cloudSyncService.importCatalogJson(json)
+            if (res.isSuccess) {
+                val count = res.getOrDefault(0)
+                val all = storeProductDao.getAllProductsList()
+                cloudSyncService.publishCatalogToCloud(all)
+                onComplete(true, "$count produit(s) importés et partagés en ligne !")
+            } else {
+                onComplete(false, "Format invalide : ${res.exceptionOrNull()?.localizedMessage}")
             }
         }
     }

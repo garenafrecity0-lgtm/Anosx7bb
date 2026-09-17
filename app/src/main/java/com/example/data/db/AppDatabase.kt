@@ -135,6 +135,9 @@ interface StoreProductDao {
     @Query("SELECT * FROM store_products ORDER BY id DESC")
     fun getAllProducts(): Flow<List<StoreProductEntity>>
 
+    @Query("SELECT * FROM store_products ORDER BY id DESC")
+    suspend fun getAllProductsList(): List<StoreProductEntity>
+
     @Query("SELECT * FROM store_products WHERE id = :id LIMIT 1")
     suspend fun getProductById(id: Long): StoreProductEntity?
 

@@ -27,11 +27,14 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -95,6 +98,8 @@ fun ClientStoreScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val contactConfig by viewModel.contactConfig.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
+    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
     val context = LocalContext.current
 
     var selectedProductForDetail by remember { mutableStateOf<StoreProductEntity?>(null) }
@@ -178,11 +183,32 @@ fun ClientStoreScreen(
                         }
                     }
 
-                    // Boutons d'actions en haut à droite (Admin si autorisé, Contact, Déconnexion)
+                    // Boutons d'actions en haut à droite (Admin si autorisé, Synchroniser, Contact, Déconnexion)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Bouton Synchroniser avec le Cloud en direct
+                        IconButton(
+                            onClick = {
+                                viewModel.syncFromCloudNow { _, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(DarkSurfaceElevated)
+                                .border(1.dp, CyberCyan.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudSync,
+                                contentDescription = "Synchroniser avec le Cloud",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
                         // Si Administrateur, bouton d'accès au panneau d'administration
                         if (authStatus.isAdmin) {
                             Box(
@@ -246,6 +272,44 @@ fun ClientStoreScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // =========================================================================
+            // BANDEAU DE STATUT CLOUD & SYNCHRONISATION MULTI-APPAREILS
+            // =========================================================================
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CyberCyan.copy(alpha = 0.08f))
+                        .border(1.dp, CyberCyan.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (isCloudConnected) CyberNeonGreen else CyberCrimson)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isCloudConnected) "Serveur Cloud Connecté • Sync en direct" else "Mode Hors-ligne (Reconnexion...)",
+                            color = if (isCloudConnected) CyberNeonGreen else CyberCrimson,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Actualisation auto",
+                        color = TextMuted,
+                        fontSize = 9.sp
+                    )
                 }
             }
 

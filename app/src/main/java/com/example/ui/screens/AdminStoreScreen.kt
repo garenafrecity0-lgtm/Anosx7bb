@@ -37,6 +37,9 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Edit
@@ -60,6 +63,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -104,6 +108,7 @@ fun AdminStoreScreen(
     modifier: Modifier = Modifier
 ) {
     val products by viewModel.allProducts.collectAsState()
+    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
     val context = LocalContext.current
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -211,7 +216,28 @@ fun AdminStoreScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        // Bouton Actualiser Cloud
+                        IconButton(
+                            onClick = {
+                                viewModel.syncFromCloudNow { _, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(DarkSurfaceElevated)
+                                .border(1.dp, CyberCyan.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudSync,
+                                contentDescription = "Synchroniser Cloud",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         IconButton(
                             onClick = { showLogoutConfirmDialog = true },
@@ -229,6 +255,45 @@ fun AdminStoreScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // =========================================================================
+            // BANDEAU CLOUD DIRECT ADMIN
+            // =========================================================================
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CyberGold.copy(alpha = 0.08f))
+                        .border(1.dp, CyberGold.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (isCloudConnected) CyberNeonGreen else CyberCrimson)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isCloudConnected) "Serveur Cloud Actif • Tous les clients synchronisés" else "Mode Hors-ligne",
+                            color = if (isCloudConnected) CyberNeonGreen else CyberCrimson,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Diffusion instantanée",
+                        color = CyberGold,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
@@ -315,6 +380,39 @@ fun AdminStoreScreen(
                                     text = "+ METTRE EN LIGNE UNE NOUVELLE APPLICATION",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Bouton d'envoi / synchronisation Cloud forcée pour tous les clients
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.pushCatalogToCloudNow { _, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(42.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudUpload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = CyberCyan
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "DIFFUSER TOUT LE CATALOGUE DANS LE CLOUD",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan
                                 )
                             }
                         }
