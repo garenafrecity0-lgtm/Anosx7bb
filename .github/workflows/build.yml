@@ -25,39 +25,33 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Accept Android SDK Licenses & Install Components
-      run: |
-        yes | sdkmanager --licenses || true
-        sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
-
-    - name: Setup Keystore & Environment
+    - name: Setup Keystore and Environment
       run: |
         touch .env
         touch .env.example
         echo "APP_BUILD_TYPE=debug" >> .env
         if [ -f "debug.keystore.base64" ]; then
           base64 -d debug.keystore.base64 > debug.keystore
-        else
+        fi
+        if [ ! -f "debug.keystore" ]; then
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
         fi
-        chmod +x gradlew
+        chmod +x ./gradlew
 
-    - name: Build Debug APK
-      run: ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
+    - name: Build Debug APK with Gradle
+      run: ./gradlew assembleDebug --stacktrace --no-daemon
 
     - name: Prepare APK Package
       run: |
         mkdir -p build-apks
-        find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} build-apks/Anos-Store.apk \;
+        find app/build/outputs/apk/debug/ -type f -name "*.apk" -exec cp {} build-apks/Anos-Store.apk \;
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Anos-Store-APK
         path: build-apks/Anos-Store.apk
+        retention-days: 14
 
     - name: Publish GitHub Release with APK
       if: github.ref == 'refs/heads/main'
@@ -65,9 +59,9 @@ jobs:
       continue-on-error: true
       with:
         tag_name: v4.0-build${{ github.run_number }}
-        name: Anos Store - Release (Build ${{ github.run_number }})
+        name: Anos Store - Version v4.0 (Build ${{ github.run_number }})
         body: |
-          ### 🔥 Anos Store - Espace Sécurisé & VIP Game Launcher Android
+          ### 🔥 Anos Store - Version Officielle
           Téléchargez et installez le fichier **Anos-Store.apk** ci-dessous sur votre smartphone Android.
         draft: false
         prerelease: false
