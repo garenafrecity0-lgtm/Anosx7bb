@@ -1,4 +1,4 @@
-name: Build Anos v4 APK
+name: Build Anos Store APK
 
 on:
   push:
@@ -30,6 +30,7 @@ jobs:
     - name: Setup Keystore & Environment
       run: |
         touch .env
+        touch .env.example
         if [ -f "debug.keystore.base64" ]; then
           base64 -d debug.keystore.base64 > debug.keystore
         else
@@ -43,13 +44,13 @@ jobs:
     - name: Prepare APK Package
       run: |
         mkdir -p build-apks
-        cp app/build/outputs/apk/debug/*.apk build-apks/Anos-v4.apk
+        cp app/build/outputs/apk/debug/*.apk build-apks/Anos-Store.apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Anos-v4-APK
-        path: build-apks/Anos-v4.apk
+        name: Anos-Store-APK
+        path: build-apks/Anos-Store.apk
 
     - name: Publish GitHub Release with APK
       if: github.ref == 'refs/heads/main'
@@ -57,12 +58,12 @@ jobs:
       continue-on-error: true
       with:
         tag_name: v4.0-build${{ github.run_number }}
-        name: Anos v4 - Release (Build ${{ github.run_number }})
+        name: Anos Store - Release (Build ${{ github.run_number }})
         body: |
-          ### 🔥 Anos v4 - VIP Game Booster Android
-          Téléchargez et installez le fichier **Anos-v4.apk** ci-dessous sur votre smartphone Android.
+          ### 🔥 Anos Store - Espace Sécurisé & VIP Game Launcher Android
+          Téléchargez et installez le fichier **Anos-Store.apk** ci-dessous sur votre smartphone Android.
         draft: false
         prerelease: false
-        files: build-apks/Anos-v4.apk
+        files: build-apks/Anos-Store.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
