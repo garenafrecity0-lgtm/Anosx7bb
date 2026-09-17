@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.service.GamingOverlayService
 import com.example.ui.components.AnosAiAssistantDialog
 import com.example.ui.components.BroadcastsDialog
 import com.example.ui.components.ReportIssueDialog
@@ -93,6 +95,7 @@ fun ProtectedVaultScreen(
     val authStatus by viewModel.authStatus.collectAsState()
     val protectedApp by viewModel.protectedApp.collectAsState()
     val broadcasts by viewModel.broadcasts.collectAsState()
+    val isOverlayActive by GamingOverlayService.isRunning.collectAsState()
 
     var showAiDialog by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
@@ -533,7 +536,7 @@ fun ProtectedVaultScreen(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // BOUTON 1 : LANCER L'APPLICATION SANS QUITTER ANOS STORE
+                // BOUTON PRINCIPAL : LANCER L'APPLICATION
                 Button(
                     onClick = {
                         viewModel.launchProtectedApp { error ->
@@ -562,8 +565,8 @@ fun ProtectedVaultScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "LANCER L'APP (SANS QUITTER ANOS STORE)",
-                            fontSize = 12.sp,
+                            text = "LANCER L'APPLICATION",
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.5.sp
                         )
