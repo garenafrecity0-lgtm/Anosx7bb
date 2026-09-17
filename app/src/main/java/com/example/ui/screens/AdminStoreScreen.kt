@@ -327,7 +327,7 @@ fun AdminStoreScreen(
             // =========================================================================
             item {
                 Text(
-                    text = "APPLICATIONS ACTUELLEMENT EN VENTE",
+                    text = "APPLICATIONS ACTUELLEMENT EN VENTE (${products.size})",
                     color = TextMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -336,15 +336,54 @@ fun AdminStoreScreen(
                 )
             }
 
-            items(products, key = { it.id }) { product ->
-                AdminProductCard(
-                    product = product,
-                    onEdit = { productToEdit = product },
-                    onDelete = { productToDelete = product },
-                    onTestLink = {
-                        viewModel.openExternalBuyLink(context, product.buyUrl, product.name)
+            if (products.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 24.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(DarkSurface)
+                            .border(BorderStroke(1.dp, DarkBorder), RoundedCornerShape(16.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingBag,
+                                contentDescription = null,
+                                tint = CyberGold,
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Votre boutique est vide",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Aucune application n'est mise en vente pour l'instant.\nCliquez sur le bouton ci-dessus pour ajouter votre premier produit.",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                lineHeight = 16.sp
+                            )
+                        }
                     }
-                )
+                }
+            } else {
+                items(products, key = { it.id }) { product ->
+                    AdminProductCard(
+                        product = product,
+                        onEdit = { productToEdit = product },
+                        onDelete = { productToDelete = product },
+                        onTestLink = {
+                            viewModel.openExternalBuyLink(context, product.buyUrl, product.name)
+                        }
+                    )
+                }
             }
         }
     }
@@ -474,6 +513,10 @@ fun AdminProductCard(
         border = BorderStroke(1.dp, DarkBorder)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            val isRecentlyAdded = (System.currentTimeMillis() - product.createdAt) < (48L * 60 * 60 * 1000)
+            val displayBadge = if (isRecentlyAdded) "NOUVEAU" else product.badge
+            val isGreenNouveau = displayBadge.equals("NOUVEAU", ignoreCase = true) || isRecentlyAdded
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -492,10 +535,24 @@ fun AdminProductCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(CyberGold.copy(alpha = 0.2f))
+                            .background(
+                                if (isGreenNouveau) CyberNeonGreen.copy(alpha = 0.2f)
+                                else CyberGold.copy(alpha = 0.2f)
+                            )
+                            .border(
+                                1.dp,
+                                if (isGreenNouveau) CyberNeonGreen.copy(alpha = 0.8f)
+                                else CyberGold.copy(alpha = 0.5f),
+                                RoundedCornerShape(6.dp)
+                            )
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(product.badge, color = CyberGold, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(
+                            text = displayBadge,
+                            color = if (isGreenNouveau) CyberNeonGreen else CyberGold,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black
+                        )
                     }
                 }
 
@@ -612,7 +669,7 @@ fun ProductFormDialog(
     var price by remember { mutableStateOf(initialProduct?.price ?: "") }
     var buyUrl by remember { mutableStateOf(initialProduct?.buyUrl ?: "") }
     var category by remember { mutableStateOf(initialProduct?.category ?: "Injecteur VIP") }
-    var badge by remember { mutableStateOf(initialProduct?.badge ?: "POPULAIRE") }
+    var badge by remember { mutableStateOf(initialProduct?.badge ?: "NOUVEAU") }
     var imageUrl by remember { mutableStateOf(initialProduct?.imageUrl ?: "") }
 
     // Launcher pour ouvrir la galerie / sélection d'image du téléphone
@@ -942,8 +999,46 @@ fun ProductFormDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Badge
-                Text("Badge VIP", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Badge VIP (Auto: 'NOUVEAU' en vert pendant 48h)", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("NOUVEAU", "BEST SELLER", "VIP EXCLUSIF", "POPULAIRE").forEach { b ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (badge.equals(b, ignoreCase = true)) {
+                                        if (b == "NOUVEAU") CyberNeonGreen.copy(alpha = 0.25f)
+                                        else CyberGold.copy(alpha = 0.25f)
+                                    } else DarkSurfaceElevated
+                                )
+                                .border(
+                                    1.dp,
+                                    if (badge.equals(b, ignoreCase = true)) {
+                                        if (b == "NOUVEAU") CyberNeonGreen else CyberGold
+                                    } else DarkBorder,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { badge = b }
+                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = b,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (badge.equals(b, ignoreCase = true)) {
+                                    if (b == "NOUVEAU") CyberNeonGreen else CyberGold
+                                } else TextSecondary
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = badge,
                     onValueChange = { badge = it },

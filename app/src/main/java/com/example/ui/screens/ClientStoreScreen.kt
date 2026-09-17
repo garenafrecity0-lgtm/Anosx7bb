@@ -468,29 +468,62 @@ fun ClientStoreScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(32.dp),
+                            .padding(horizontal = 24.dp, vertical = 40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingBag,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(DarkSurfaceElevated)
+                                    .border(1.dp, CyberGold.copy(alpha = 0.4f), RoundedCornerShape(20.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ShoppingBag,
+                                    contentDescription = null,
+                                    tint = CyberGold,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
                             Text(
-                                text = "Aucune application trouvée",
+                                text = if (searchQuery.isBlank() && selectedCategory == "Tous")
+                                    "Boutique en cours d'approvisionnement"
+                                else
+                                    "Aucun résultat trouvé",
                                 color = TextPrimary,
                                 fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Essayez avec d'autres mots-clés ou filtres.",
-                                color = TextMuted,
-                                fontSize = 12.sp
+                                text = if (searchQuery.isBlank() && selectedCategory == "Tous")
+                                    "Aucune application n'est en vente pour le moment.\nL'administrateur mettra en ligne les prochains produits très bientôt."
+                                else
+                                    "Aucun produit ne correspond à votre recherche ou catégorie sélectionnée.",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 17.sp
                             )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = { showContactDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = DarkSurfaceElevated,
+                                    contentColor = CyberGold
+                                ),
+                                border = BorderStroke(1.dp, CyberGold.copy(alpha = 0.5f))
+                            ) {
+                                Text("Contacter Anos FF (Support)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -586,6 +619,11 @@ fun ProductCardItem(
     onBuyClick: () -> Unit,
     onDetailClick: () -> Unit
 ) {
+    // 48h logic: if added within the last 48 hours, display NOUVEAU in green
+    val isRecentlyAdded = (System.currentTimeMillis() - product.createdAt) < (48L * 60 * 60 * 1000)
+    val displayBadge = if (isRecentlyAdded) "NOUVEAU" else product.badge
+    val isGreenNouveau = displayBadge.equals("NOUVEAU", ignoreCase = true) || isRecentlyAdded
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -594,7 +632,7 @@ fun ProductCardItem(
             .testTag("product_card_${product.id}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        border = BorderStroke(1.dp, DarkBorder)
+        border = BorderStroke(1.dp, if (isRecentlyAdded) CyberNeonGreen.copy(alpha = 0.4f) else DarkBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: Category, Rating & Badge
@@ -635,24 +673,24 @@ fun ProductCardItem(
                     }
                 }
 
-                // Badge VIP (BEST SELLER, POPULAIRE, etc.)
+                // Badge VIP (NOUVEAU en vert si < 48h, BEST SELLER, etc.)
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .background(
-                            when (product.badge) {
-                                "BEST SELLER" -> CyberGold.copy(alpha = 0.2f)
-                                "VIP EXCLUSIF" -> CyberCrimson.copy(alpha = 0.2f)
-                                "NOUVEAU" -> CyberNeonGreen.copy(alpha = 0.2f)
+                            when {
+                                isGreenNouveau -> CyberNeonGreen.copy(alpha = 0.2f)
+                                displayBadge == "BEST SELLER" -> CyberGold.copy(alpha = 0.2f)
+                                displayBadge == "VIP EXCLUSIF" -> CyberCrimson.copy(alpha = 0.2f)
                                 else -> CyberCyan.copy(alpha = 0.2f)
                             }
                         )
                         .border(
                             1.dp,
-                            when (product.badge) {
-                                "BEST SELLER" -> CyberGold.copy(alpha = 0.6f)
-                                "VIP EXCLUSIF" -> CyberCrimson.copy(alpha = 0.6f)
-                                "NOUVEAU" -> CyberNeonGreen.copy(alpha = 0.6f)
+                            when {
+                                isGreenNouveau -> CyberNeonGreen.copy(alpha = 0.8f)
+                                displayBadge == "BEST SELLER" -> CyberGold.copy(alpha = 0.6f)
+                                displayBadge == "VIP EXCLUSIF" -> CyberCrimson.copy(alpha = 0.6f)
                                 else -> CyberCyan.copy(alpha = 0.6f)
                             },
                             RoundedCornerShape(6.dp)
@@ -660,11 +698,11 @@ fun ProductCardItem(
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = product.badge,
-                        color = when (product.badge) {
-                            "BEST SELLER" -> CyberGold
-                            "VIP EXCLUSIF" -> CyberCrimson
-                            "NOUVEAU" -> CyberNeonGreen
+                        text = displayBadge,
+                        color = when {
+                            isGreenNouveau -> CyberNeonGreen
+                            displayBadge == "BEST SELLER" -> CyberGold
+                            displayBadge == "VIP EXCLUSIF" -> CyberCrimson
                             else -> CyberCyan
                         },
                         fontSize = 9.sp,
@@ -809,6 +847,10 @@ fun ProductDetailDialog(
                     .padding(vertical = 4.dp)
             ) {
                 // Header with close
+                val isRecentlyAdded = (System.currentTimeMillis() - product.createdAt) < (48L * 60 * 60 * 1000)
+                val displayBadge = if (isRecentlyAdded) "NOUVEAU" else product.badge
+                val isGreenNouveau = displayBadge.equals("NOUVEAU", ignoreCase = true) || isRecentlyAdded
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -817,12 +859,21 @@ fun ProductDetailDialog(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(CyberGold.copy(alpha = 0.2f))
+                            .background(
+                                if (isGreenNouveau) CyberNeonGreen.copy(alpha = 0.2f)
+                                else CyberGold.copy(alpha = 0.2f)
+                            )
+                            .border(
+                                1.dp,
+                                if (isGreenNouveau) CyberNeonGreen.copy(alpha = 0.8f)
+                                else CyberGold.copy(alpha = 0.6f),
+                                RoundedCornerShape(6.dp)
+                            )
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = product.badge,
-                            color = CyberGold,
+                            text = displayBadge,
+                            color = if (isGreenNouveau) CyberNeonGreen else CyberGold,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black
                         )

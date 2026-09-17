@@ -166,4 +166,63 @@ object NotificationHelper {
             // Missing POST_NOTIFICATIONS runtime permission on Android 13+
         }
     }
+
+    fun postNewProductNotification(
+        context: Context,
+        productName: String,
+        productPrice: String,
+        productCategory: String,
+        productDescription: String
+    ) {
+        initNotificationChannels(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val notificationId = (System.currentTimeMillis() % 100000).toInt()
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val title = "⚡ NOUVEAU PRODUIT DISPONIBLE : $productName"
+        val cleanDesc = if (productDescription.isNotBlank()) productDescription.trim() else "Disponible dès maintenant dans la boutique VIP !"
+        val shortContent = "[$productCategory] $productPrice • $cleanDesc"
+        val bigBody = "🔥 NOUVELLE ARRIVÉE DANS LA BOUTIQUE VIP !\n\n" +
+                "📦 Produit : $productName\n" +
+                "🏷️ Catégorie : $productCategory\n" +
+                "💎 Prix VIP : $productPrice\n" +
+                "📝 Infos : $cleanDesc\n\n" +
+                "🚀 Ouvrez l'application pour commander ou découvrir les détails !"
+
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_BROADCAST)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(shortContent)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(bigBody)
+                    .setBigContentTitle(title)
+                    .setSummaryText("Boutique Anos VIP • Nouveau")
+            )
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_PROMO)
+            .setSound(defaultSoundUri)
+            .setVibrate(longArrayOf(0, 300, 150, 300))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setColor(Color.parseColor("#00FFA3")) // CyberNeonGreen
+            .build()
+
+        try {
+            manager.notify(notificationId, notification)
+        } catch (_: SecurityException) {
+            // Missing POST_NOTIFICATIONS runtime permission on Android 13+
+        }
+    }
 }

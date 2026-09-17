@@ -159,6 +159,12 @@ interface StoreProductDao {
     @Query("DELETE FROM store_products WHERE id = :id")
     suspend fun deleteProduct(id: Long)
 
+    @Query("DELETE FROM store_products WHERE name IN ('Free Fire Injector VIP v12', 'Headshot AIM Pro Macro', 'Panel Mod Menu Anos FF Exclusif', 'Pack Skins & Emotes Débloqués')")
+    suspend fun deleteDemoProducts()
+
+    @Query("DELETE FROM store_products")
+    suspend fun clearAllProducts()
+
     @Query("SELECT COUNT(*) FROM store_products")
     suspend fun getProductCount(): Int
 }
@@ -173,7 +179,7 @@ interface StoreProductDao {
         ProtectedAppEntity::class,
         StoreProductEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -11,6 +11,7 @@ import com.example.data.auth.AuthStatus
 import com.example.data.auth.LicenseAuthManager
 import com.example.data.db.AppDatabase
 import com.example.data.db.StoreProductEntity
+import com.example.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -72,7 +73,11 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            seedDefaultProductsIfEmpty()
+            try {
+                storeProductDao.deleteDemoProducts()
+            } catch (e: Exception) {
+                // Ignore
+            }
             checkSavedAuth()
         }
     }
@@ -94,10 +99,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             val status = authManager.validateKey(key)
             _authStatus.value = status
             if (status.isAuthenticated) {
-                val mode = if (status.isAdmin) "Mode Administrateur" else "Mode Client (Acheteur)"
+                val mode = if (status.isAdmin) "Mode Administrateur" else "Mode Client"
                 onResult(true, "Connexion réussie ($mode)")
             } else {
-                onResult(false, "Clé invalide. Clé client : 123 | Clé admin : com.dts")
+                onResult(false, "Clé d'accès incorrecte. Accès Client : 123")
             }
         }
     }
@@ -150,6 +155,16 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                     badge = if (badge.isBlank()) "NOUVEAU" else badge.trim()
                 )
                 storeProductDao.insertProduct(product)
+
+                // Notification réelle envoyée aux clients avec les détails du nouveau produit
+                NotificationHelper.postNewProductNotification(
+                    context = getApplication(),
+                    productName = product.name,
+                    productPrice = product.price,
+                    productCategory = product.category,
+                    productDescription = product.description
+                )
+
                 onComplete(true, "Application ajoutée à la boutique avec succès !")
             } catch (e: Exception) {
                 onComplete(false, "Erreur : ${e.localizedMessage}")
@@ -237,56 +252,14 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun seedDefaultProductsIfEmpty() {
-        val count = storeProductDao.getProductCount()
-        if (count == 0) {
-            val defaults = listOf(
-                StoreProductEntity(
-                    name = "Free Fire Injector VIP v12",
-                    description = "Menu flottant premium avec auto-headshot 99%, antenna laser, pas de recul et bypass anti-ban permanent.",
-                    price = "5 000 FCFA / 10 €",
-                    imageUrl = "",
-                    buyUrl = "https://wa.me/?text=Bonjour%20Anos%20Store%2C%20je%20veux%20acheter%20Free%20Fire%20Injector%20VIP%20v12",
-                    category = "Injecteur VIP",
-                    badge = "BEST SELLER",
-                    rating = 5.0f,
-                    downloadsCount = 3420
-                ),
-                StoreProductEntity(
-                    name = "Headshot AIM Pro Macro",
-                    description = "Macro tactile ultra-fluide 120 FPS, stabilisation du viseur et DPI personnalisé pour tous les téléphones Android.",
-                    price = "3 500 FCFA / 7 €",
-                    imageUrl = "",
-                    buyUrl = "https://wa.me/?text=Bonjour%20Anos%20Store%2C%20je%20veux%20acheter%20Headshot%20AIM%20Pro%20Macro",
-                    category = "Sensibilité",
-                    badge = "POPULAIRE",
-                    rating = 4.9f,
-                    downloadsCount = 2150
-                ),
-                StoreProductEntity(
-                    name = "Panel Mod Menu Anos FF Exclusif",
-                    description = "Le panel ultime créé par Anos FF avec ESP Line, Box, Chams colorés et activation instantanée en jeu.",
-                    price = "10 000 FCFA / 18 €",
-                    imageUrl = "",
-                    buyUrl = "https://wa.me/?text=Bonjour%20Anos%20Store%2C%20je%20veux%20acheter%20Panel%20Mod%20Menu%20Anos%20FF",
-                    category = "Mod Menu",
-                    badge = "VIP EXCLUSIF",
-                    rating = 5.0f,
-                    downloadsCount = 4890
-                ),
-                StoreProductEntity(
-                    name = "Pack Skins & Emotes Débloqués",
-                    description = "Outil de configuration visuelle pour débloquer toutes les tenues légendaires, armes évolutives et emotes en jeu.",
-                    price = "2 500 FCFA / 5 €",
-                    imageUrl = "",
-                    buyUrl = "https://wa.me/?text=Bonjour%20Anos%20Store%2C%20je%20veux%20acheter%20Pack%20Skins%20VIP",
-                    category = "Pack VIP",
-                    badge = "NOUVEAU",
-                    rating = 4.8f,
-                    downloadsCount = 1870
-                )
-            )
-            storeProductDao.insertProducts(defaults)
+    fun clearAllProducts(onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                storeProductDao.clearAllProducts()
+                onComplete(true, "Tous les produits ont été supprimés.")
+            } catch (e: Exception) {
+                onComplete(false, "Erreur lors du vidage de la boutique.")
+            }
         }
     }
 }

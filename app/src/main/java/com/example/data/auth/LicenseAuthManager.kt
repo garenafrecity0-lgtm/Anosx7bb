@@ -224,7 +224,7 @@ class LicenseAuthManager(private val context: Context) {
                     durationHours = 0,
                     expiresAt = 0,
                     isActive = true,
-                    description = "Clé Maître Administrateur (com.dts)"
+                    description = "Clé Maître Administrateur (Privée)"
                 )
             )
             recordDeviceHeartbeat(trimmed, "ADMIN", "Console Admin Anos Store")
