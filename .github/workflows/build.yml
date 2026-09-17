@@ -23,28 +23,53 @@ jobs:
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: 'gradle'
 
-    - name: Setup Keystore and Environment
+    - name: Setup Android SDK Environment & Accept Licenses
+      run: |
+        export ANDROID_HOME=/usr/local/lib/android/sdk
+        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+        echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+        
+        # Accept all Android licenses automatically
+        mkdir -p "$ANDROID_HOME/licenses" || true
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+        # Install required platform & build-tools
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" || true
+
+    - name: Setup Keystore and Environment Files
       run: |
         touch .env
         touch .env.example
-        echo "APP_BUILD_TYPE=debug" >> .env
+        echo "APP_BUILD_TYPE=debug" > .env
+        echo "APP_BUILD_TYPE=debug" > .env.example
+        
+        # Restore debug keystore
         if [ -f "debug.keystore.base64" ]; then
           base64 -d debug.keystore.base64 > debug.keystore
         fi
         if [ ! -f "debug.keystore" ]; then
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
         fi
+        
         chmod +x ./gradlew
 
     - name: Build Debug APK with Gradle
-      run: ./gradlew assembleDebug --stacktrace --no-daemon
+      run: |
+        ./gradlew :app:assembleDebug --stacktrace --no-daemon -Dorg.gradle.configuration-cache=false
 
-    - name: Prepare APK Package
+    - name: Locate and Package APK
       run: |
         mkdir -p build-apks
-        find app/build/outputs/apk/debug/ -type f -name "*.apk" -exec cp {} build-apks/Anos-Store.apk \;
+        APK_PATH=$(find app/build/outputs/apk/debug/ -type f -name "*.apk" | head -n 1)
+        if [ -n "$APK_PATH" ]; then
+          cp "$APK_PATH" build-apks/Anos-Store.apk
+          echo "APK successfully found and prepared at build-apks/Anos-Store.apk"
+        else
+          echo "Error: APK not found in app/build/outputs/apk/debug/"
+          exit 1
+        fi
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
