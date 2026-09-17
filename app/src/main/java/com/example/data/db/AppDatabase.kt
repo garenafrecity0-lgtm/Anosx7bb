@@ -130,6 +130,39 @@ interface ProtectedAppDao {
     suspend fun setLocked(isLocked: Boolean)
 }
 
+@Dao
+interface StoreProductDao {
+    @Query("SELECT * FROM store_products ORDER BY id DESC")
+    fun getAllProducts(): Flow<List<StoreProductEntity>>
+
+    @Query("SELECT * FROM store_products WHERE id = :id LIMIT 1")
+    suspend fun getProductById(id: Long): StoreProductEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertProduct(product: StoreProductEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertProducts(products: List<StoreProductEntity>)
+
+    @Query("UPDATE store_products SET name = :name, description = :description, price = :price, imageUrl = :imageUrl, buyUrl = :buyUrl, category = :category, badge = :badge WHERE id = :id")
+    suspend fun updateProduct(
+        id: Long,
+        name: String,
+        description: String,
+        price: String,
+        imageUrl: String,
+        buyUrl: String,
+        category: String,
+        badge: String
+    )
+
+    @Query("DELETE FROM store_products WHERE id = :id")
+    suspend fun deleteProduct(id: Long)
+
+    @Query("SELECT COUNT(*) FROM store_products")
+    suspend fun getProductCount(): Int
+}
+
 @Database(
     entities = [
         BoostLogEntity::class,
@@ -137,9 +170,10 @@ interface ProtectedAppDao {
         LicenseKeyEntity::class,
         ActiveSessionEntity::class,
         BroadcastMessageEntity::class,
-        ProtectedAppEntity::class
+        ProtectedAppEntity::class,
+        StoreProductEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -149,6 +183,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun activeSessionDao(): ActiveSessionDao
     abstract fun broadcastDao(): BroadcastDao
     abstract fun protectedAppDao(): ProtectedAppDao
+    abstract fun storeProductDao(): StoreProductDao
 
     companion object {
         @Volatile

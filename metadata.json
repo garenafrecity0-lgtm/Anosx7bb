@@ -1,6 +1,6 @@
 {
   "name": "Anos Store",
-  "description": "Anos Store - Espace sécurisé protégé par clés VIP par Anos FF. Lancez vos jeux et applications protégées directement sans quitter Anos Store.",
+  "description": "Anos Store - Boutique en ligne officielle VIP d'applications et mods par Anos FF avec panel d'administration et authentification permanente.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

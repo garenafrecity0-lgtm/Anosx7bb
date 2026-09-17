@@ -35,6 +35,14 @@ class LicenseAuthManagerTest {
     }
 
     @Test
+    fun testClientKeyAuthentication() = runBlocking {
+        val result = authManager.validateKey("123")
+        assertTrue(result.isAuthenticated)
+        assertEquals(false, result.isAdmin)
+        assertEquals("CLIENT", result.keyType)
+    }
+
+    @Test
     fun testTemporaryKeyGenerationAndValidation() = runBlocking {
         val generatedKey = authManager.generateLicense(durationHours = 24, label = "Test Pass 24h")
         assertTrue(generatedKey.keyString.startsWith("ANOS-V3-") || generatedKey.keyString.startsWith("ANOS-X7-"))

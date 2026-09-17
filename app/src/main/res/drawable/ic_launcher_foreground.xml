@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/anos_icon"
+        android:drawable="@drawable/anos_store_icon_1789664668274"
         android:gravity="center" />
 </layer-list>

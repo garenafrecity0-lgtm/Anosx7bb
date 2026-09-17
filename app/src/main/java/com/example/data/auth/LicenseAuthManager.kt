@@ -213,11 +213,10 @@ class LicenseAuthManager(private val context: Context) {
 
         val currentMasterKey = getMasterAdminKey()
 
-        // 1. Check Master Admin Key (Case-insensitive)
-        if (trimmed.equals(currentMasterKey, ignoreCase = true)) {
-            // Save admin key
+        // 1. Check Master Admin Key: "com.dts" (Case-insensitive)
+        if (trimmed.equals(currentMasterKey, ignoreCase = true) || trimmed.equals("com.dts", ignoreCase = true)) {
+            // Save admin key for permanent auto-login
             prefs.edit().putString(PREF_SAVED_KEY, trimmed).apply()
-            // Make sure it exists in DB as admin
             licenseDao.insertLicense(
                 LicenseKeyEntity(
                     keyString = trimmed,
@@ -225,10 +224,10 @@ class LicenseAuthManager(private val context: Context) {
                     durationHours = 0,
                     expiresAt = 0,
                     isActive = true,
-                    description = "Clé Maître Administrateur Anox v2"
+                    description = "Clé Maître Administrateur (com.dts)"
                 )
             )
-            recordDeviceHeartbeat(trimmed, "ADMIN", "Console Maître (Admin en direct)")
+            recordDeviceHeartbeat(trimmed, "ADMIN", "Console Admin Anos Store")
             return AuthStatus(
                 isAuthenticated = true,
                 isAdmin = true,
@@ -236,6 +235,31 @@ class LicenseAuthManager(private val context: Context) {
                 keyType = "ADMIN",
                 expiresAt = 0,
                 remainingTimeFormatted = "ACCÈS MAÎTRE ILLIMITÉ"
+            )
+        }
+
+        // 2. Check Default Client Key: "123"
+        if (trimmed == "123") {
+            // Save client key for permanent auto-login
+            prefs.edit().putString(PREF_SAVED_KEY, "123").apply()
+            licenseDao.insertLicense(
+                LicenseKeyEntity(
+                    keyString = "123",
+                    keyType = "CLIENT",
+                    durationHours = 0,
+                    expiresAt = 0,
+                    isActive = true,
+                    description = "Clé Client Acheteur (123)"
+                )
+            )
+            recordDeviceHeartbeat("123", "CLIENT", "Client Boutique Anos Store")
+            return AuthStatus(
+                isAuthenticated = true,
+                isAdmin = false,
+                activeKey = "123",
+                keyType = "CLIENT",
+                expiresAt = 0,
+                remainingTimeFormatted = "ACCÈS CLIENT PERMANENT"
             )
         }
 

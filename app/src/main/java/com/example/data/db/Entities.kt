@@ -89,3 +89,20 @@ data class ProtectedAppEntity(
     val launchCount: Int = 0
 )
 
+@Entity(tableName = "store_products")
+data class StoreProductEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0L,
+    val name: String,
+    val description: String,
+    val price: String, // ex: "5 000 FCFA", "10 €", "Gratuit VIP"
+    val imageUrl: String = "",
+    val buyUrl: String = "", // Lien externe vers WhatsApp / Telegram / Site d'achat
+    val category: String = "Application VIP", // "Mod Menu", "Injecteur", "Sensibilité", "Pack VIP"
+    val badge: String = "POPULAIRE", // "POPULAIRE", "NOUVEAU", "VIP EXCLUSIF", "BEST SELLER"
+    val isAvailable: Boolean = true,
+    val rating: Float = 4.9f,
+    val downloadsCount: Int = 1500,
+    val createdAt: Long = System.currentTimeMillis()
+)
+

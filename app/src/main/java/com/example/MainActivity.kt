@@ -24,9 +24,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -49,10 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.ui.screens.AdminPanelScreen
+import com.example.ui.screens.AdminStoreScreen
 import com.example.ui.screens.AuthScreen
-import com.example.ui.screens.EmbeddedAppContainerScreen
-import com.example.ui.screens.ProtectedVaultScreen
+import com.example.ui.screens.ClientStoreScreen
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberGold
 import com.example.ui.theme.DarkBackground
@@ -60,25 +59,24 @@ import com.example.ui.theme.DarkBorder
 import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.TextMuted
-import com.example.ui.viewmodel.BoosterViewModel
+import com.example.ui.viewmodel.StoreViewModel
 
-enum class NavigationTab(
+enum class StoreNavigationTab(
     val title: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
-    VAULT("Anos Store", Icons.Filled.Lock, Icons.Outlined.Lock, "tab_vault"),
-    ADMIN("Console Admin", Icons.Filled.AdminPanelSettings, Icons.Outlined.AdminPanelSettings, "tab_admin")
+    STORE("Boutique", Icons.Filled.ShoppingBag, Icons.Outlined.ShoppingBag, "tab_store"),
+    ADMIN("Panel Admin", Icons.Filled.AdminPanelSettings, Icons.Outlined.AdminPanelSettings, "tab_admin")
 }
 
 class MainActivity : ComponentActivity() {
-    private val viewModel: BoosterViewModel by viewModels()
+    private val viewModel: StoreViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        viewModel.unlock120HzAndFluidity(window)
         setContent {
             MyApplicationTheme {
                 val context = LocalContext.current
@@ -100,17 +98,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val authStatus by viewModel.authStatus.collectAsState()
-                val isInAppContainerOpen by viewModel.isInAppContainerOpen.collectAsState()
 
                 if (!authStatus.isAuthenticated) {
                     AuthScreen(viewModel = viewModel)
-                } else if (isInAppContainerOpen) {
-                    EmbeddedAppContainerScreen(
-                        viewModel = viewModel,
-                        onCloseContainer = { viewModel.closeInAppContainer() }
-                    )
                 } else {
-                    MainAppScreen(viewModel = viewModel)
+                    MainStoreAppScreen(viewModel = viewModel)
                 }
             }
         }
@@ -118,20 +110,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainAppScreen(viewModel: BoosterViewModel) {
+fun MainStoreAppScreen(viewModel: StoreViewModel) {
     val authStatus by viewModel.authStatus.collectAsState()
-    var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.VAULT) }
+    var selectedTab by rememberSaveable { mutableStateOf(StoreNavigationTab.STORE) }
 
-    // If regular user, always show Vault screen directly without admin tab
+    // If client buyer (key "123"), show Client Store only
     if (!authStatus.isAdmin) {
-        ProtectedVaultScreen(
+        ClientStoreScreen(
             viewModel = viewModel,
             onOpenAdmin = {}
         )
         return
     }
 
-    // Admin view with 2 bottom tabs: Vault preview and Admin Console
+    // If admin (key "com.dts"), show dual view with navigation tabs (Boutique & Panel Admin)
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -153,9 +145,9 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
                     containerColor = DarkSurface,
                     tonalElevation = 0.dp
                 ) {
-                    NavigationTab.entries.forEach { tab ->
+                    StoreNavigationTab.entries.forEach { tab ->
                         val isSelected = selectedTab == tab
-                        val isTabAdmin = tab == NavigationTab.ADMIN
+                        val isTabAdmin = tab == StoreNavigationTab.ADMIN
                         NavigationBarItem(
                             selected = isSelected,
                             onClick = { selectedTab = tab },
@@ -192,13 +184,16 @@ fun MainAppScreen(viewModel: BoosterViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Crossfade(targetState = selectedTab, label = "screenTransition") { tab ->
+            Crossfade(targetState = selectedTab, label = "storeScreenTransition") { tab ->
                 when (tab) {
-                    NavigationTab.VAULT -> ProtectedVaultScreen(
+                    StoreNavigationTab.STORE -> ClientStoreScreen(
                         viewModel = viewModel,
-                        onOpenAdmin = { selectedTab = NavigationTab.ADMIN }
+                        onOpenAdmin = { selectedTab = StoreNavigationTab.ADMIN }
                     )
-                    NavigationTab.ADMIN -> AdminPanelScreen(viewModel = viewModel)
+                    StoreNavigationTab.ADMIN -> AdminStoreScreen(
+                        viewModel = viewModel,
+                        onBackToStore = { selectedTab = StoreNavigationTab.STORE }
+                    )
                 }
             }
         }
